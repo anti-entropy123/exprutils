@@ -1,6 +1,6 @@
 use nix::sys::signal;
 use rand::Rng;
-use std::{ time::Duration};
+use std::time::Duration;
 use tokio::{
     fs::{File, OpenOptions},
     io::AsyncWriteExt,
@@ -34,20 +34,32 @@ fn _ph2random(s: &str) -> String {
 
 fn get_command_line() -> (String, Vec<String>, String) {
     ///////////// as map_reduce c5 //////////////////
-    // let command = "target/release/msvisor".to_owned();
+    // let command = "target/release/asvisor".to_owned();
     // let args = vec![
     //     "--files".to_owned(),
     //     "isol_config/map_reduce_large_c5.json".to_owned(),
     // ];
     // let id = String::new();
 
-    ///////////// as parallel_sort c5 //////////////////
-    // let command = "target/release/msvisor".to_owned();
+    ///////////// as parallel_sort c3 //////////////////
+    // let command = "target/release/asvisor".to_owned();
     // let args = vec![
     //     "--files".to_owned(),
-    //     "isol_config/parallel_sort_c5.json".to_owned(),
+    //     "isol_config/parallel_sort_c3.json".to_owned(),
+    //     "--metrics".to_owned(),
+    //     "total-dur".to_owned(),
     // ];
     // let id = String::new();
+
+    ///////////// as parallel_sort c5 //////////////////
+    let command = "target/release/asvisor".to_owned();
+    let args = vec![
+        "--files".to_owned(),
+        "isol_config/parallel_sort_c5.json".to_owned(),
+        "--metrics".to_owned(),
+        "total-dur".to_owned(),
+    ];
+    let id = String::new();
 
     ///////////// faastlane map_reduce c5 //////////
     // let command = "ctr".to_owned();
@@ -65,19 +77,19 @@ fn get_command_line() -> (String, Vec<String>, String) {
     // ];
 
     /////////// faastlane parallel_sort c5 //////////
-    let command = "ctr".to_owned();
-    let id = random_id();
-    let args: Vec<String> = vec![
-        "run".to_owned(),
-        "--snapshotter".to_owned(),
-        "devmapper".to_owned(),
-        "--runtime".to_owned(),
-        "io.containerd.kata-fc.v2".to_owned(),
-        "--rm".to_owned(),
-        "docker.io/library/parallel_sort_5_25_asstlane_image:latest".to_owned(),
-        id.clone(),
-        "target/release/parallel_sort".to_owned(),
-    ];
+    // let command = "ctr".to_owned();
+    // let id = random_id();
+    // let args: Vec<String> = vec![
+    //     "run".to_owned(),
+    //     "--snapshotter".to_owned(),
+    //     "devmapper".to_owned(),
+    //     "--runtime".to_owned(),
+    //     "io.containerd.kata-fc.v2".to_owned(),
+    //     "--rm".to_owned(),
+    //     "docker.io/library/parallel_sort_5_25_asstlane_image:latest".to_owned(),
+    //     id.clone(),
+    //     "target/release/parallel_sort".to_owned(),
+    // ];
 
     (command, args, id)
 }
@@ -123,19 +135,25 @@ async fn test_once() {
     let monitor_worker = tokio::spawn(monitor_resource(log_file, stop_ch_rx));
     let cleanup_worker = tokio::spawn(firecracker_worker(id_receiver));
 
-    // let total_task_num = concur_num * 3 + 1;
-    // let latencies = closeloop_cli::close_loop_generator(
+    let total_task_num = concur_num * 15 + 1;
+    let latencies = closeloop_cli::close_loop_generator(
+        get_command_line,
+        concur_num,
+        total_task_num,
+        id_sender,
+    )
+    .await;
+
+    // let total_task_num = concur_num * 10 + 1;
+    // let latencies = openloop_cli::open_loop_generator(
     //     get_command_line,
     //     concur_num,
     //     total_task_num,
     //     id_sender,
+    //     regex_str,
     // )
     // .await;
 
-    let total_task_num = concur_num * 10 + 1;
-    let latencies =
-        openloop_cli::open_loop_generator(get_command_line, concur_num, total_task_num, id_sender)
-            .await;
     drop(stop_ch_tx);
 
     cleanup_worker.await.unwrap();
@@ -207,7 +225,7 @@ async fn monitor_resource(mut log_file: File, stop_chan: Receiver<bool>) {
         interval_timer.tick().await;
 
         // 获取当前时间戳
-        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S").to_string();
+        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
 
         // 异步执行 top 命令，获取输出
         let top_output = Command::new("top")
@@ -238,6 +256,7 @@ async fn monitor_resource(mut log_file: File, stop_chan: Receiver<bool>) {
                 mem_usage = parts[7].parse().unwrap(); // 可用内存
             }
         }
+        mems.push(mem_usage as usize);
 
         // let mut self_mem_mib: i32 = 0;
         // if let Ok(status) = tokio::fs::read_to_string("/proc/self/status").await {
@@ -274,6 +293,6 @@ async fn monitor_resource(mut log_file: File, stop_chan: Receiver<bool>) {
             .expect("write log failed");
     }
 
-    // mems.sort();
-    // println!("total consume mem: {}Mib", mems.last().unwrap() - mems[0])
+    mems.sort();
+    println!("total consume mem: {}Mib", mems.last().unwrap() - mems[0])
 }
