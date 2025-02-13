@@ -42,24 +42,24 @@ fn get_command_line() -> (String, Vec<String>, String) {
     // let id = String::new();
 
     ///////////// as parallel_sort c3 //////////////////
-    // let command = "target/release/asvisor".to_owned();
-    // let args = vec![
-    //     "--files".to_owned(),
-    //     "isol_config/parallel_sort_c3.json".to_owned(),
-    //     "--metrics".to_owned(),
-    //     "total-dur".to_owned(),
-    // ];
-    // let id = String::new();
-
-    ///////////// as parallel_sort c5 //////////////////
     let command = "target/release/asvisor".to_owned();
     let args = vec![
         "--files".to_owned(),
-        "isol_config/parallel_sort_c5.json".to_owned(),
+        "isol_config/parallel_sort_c3.json".to_owned(),
         "--metrics".to_owned(),
         "total-dur".to_owned(),
     ];
     let id = String::new();
+
+    ///////////// as parallel_sort c5 //////////////////
+    // let command = "target/release/asvisor".to_owned();
+    // let args = vec![
+    //     "--files".to_owned(),
+    //     "isol_config/parallel_sort_c5.json".to_owned(),
+    //     "--metrics".to_owned(),
+    //     "total-dur".to_owned(),
+    // ];
+    // let id = String::new();
 
     ///////////// faastlane map_reduce c5 //////////
     // let command = "ctr".to_owned();
@@ -135,24 +135,24 @@ async fn test_once() {
     let monitor_worker = tokio::spawn(monitor_resource(log_file, stop_ch_rx));
     let cleanup_worker = tokio::spawn(firecracker_worker(id_receiver));
 
-    let total_task_num = concur_num * 15 + 1;
-    let latencies = closeloop_cli::close_loop_generator(
-        get_command_line,
-        concur_num,
-        total_task_num,
-        id_sender,
-    )
-    .await;
-
-    // let total_task_num = concur_num * 10 + 1;
-    // let latencies = openloop_cli::open_loop_generator(
+    // let total_task_num = concur_num * 15 + 1;
+    // let latencies = closeloop_cli::close_loop_generator(
     //     get_command_line,
     //     concur_num,
     //     total_task_num,
     //     id_sender,
-    //     regex_str,
     // )
     // .await;
+
+    let total_task_num = concur_num * 10 + 1;
+    let latencies = openloop_cli::open_loop_generator(
+        get_command_line,
+        concur_num,
+        total_task_num,
+        id_sender,
+        regex_str,
+    )
+    .await;
 
     drop(stop_ch_tx);
 
@@ -225,7 +225,9 @@ async fn monitor_resource(mut log_file: File, stop_chan: Receiver<bool>) {
         interval_timer.tick().await;
 
         // 获取当前时间戳
-        let timestamp = chrono::Local::now().format("%Y-%m-%d %H:%M:%S%.3f").to_string();
+        let timestamp = chrono::Local::now()
+            .format("%Y-%m-%d %H:%M:%S%.3f")
+            .to_string();
 
         // 异步执行 top 命令，获取输出
         let top_output = Command::new("top")
